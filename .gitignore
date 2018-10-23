@@ -1,0 +1,14 @@
+*.dat
+*.out
+fort*
+simplefem
+OUT/*.vtu
+MINE
+MYRESULTS
+DOCUMENT/*.aux
+DOCUMENT/*.toc
+DOCUMENT/*.aux
+DOCUMENT/*.bbl
+DOCUMENT/*.blg
+DOCUMENT/*.log
+
