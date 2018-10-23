@@ -18,7 +18,7 @@ integer iel
 
 open(unit=123,file='OUT/surface.dat')
 write(123,*) '#1 x'
-write(123,*) '#2 E2'
+write(123,*) '#2 dotepsilon'
 write(123,*) '#3 viscosity'
 write(123,*) '#4 pressure'
 write(123,*) '#5 dev stress 2nd inv.'

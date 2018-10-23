@@ -127,22 +127,22 @@ call DMUMPS(idT)                               ! MUMPS initialisation
 Lx=400.d3
 Ly=100.d3
 
-nelx=200
+nelx=300
 nely=nelx/4
 
 gx=0
 gy=-9.81d0
 
-tol=1.d-7
-niter=400
+tol=1.d-6
+niter=100
 
 hcapa=750 ! heat capacity of all materials 
 hcond=2.5 ! heat conductivity of all materials
 
-penalty=1.d30 ! see section 3.2 of thieulot, PEPI, 2011
+!==============================================!
+!==============================================!
 
-!==============================================!
-!==============================================!
+penalty=1.d30 ! see section 3.2 of thieulot, PEPI, 2011
 
 nstep=1
 
@@ -199,7 +199,6 @@ open(unit=1001,file='OUT/pressure_stats.dat')
 open(unit=1002,file='OUT/temperature_stats.dat')
 open(unit=1003,file='OUT/convergence_nl.dat')
 open(unit=1004,file='OUT/viscosity_stats.dat')
-open(unit=1005,file='OUT/dt.dat')
 open(unit=1020,file='OUT/mumps_info.dat')
 
 !==============================================!
@@ -665,7 +664,7 @@ chi_v=sum(abs(v-v_old))/sum(abs(v))
 chi_p=sum(abs(p-p_old))/sum(abs(p))
 
 write(*,'(a,i4,a,3es12.5,a,es12.5)') 'iteration:',iter,' | chi u,v,p:',chi_u,chi_v,chi_p,' | tol:',tol
-write(1003,*) iter,chi_u,chi_v,tol
+write(1003,*) iter,chi_u,chi_v,chi_p,tol
 
 u_old=u
 v_old=v
@@ -687,7 +686,6 @@ dt=CFL_nb*min(hx,hy)/max(umax,vmax)
 
 time=time+dt
 
-write(1005,*) istep,dt ; call flush(1005)
 
 !==============================================!
 !=====[Build temperature matrix]===============!

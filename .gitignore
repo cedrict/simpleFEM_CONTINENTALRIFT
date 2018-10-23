@@ -5,6 +5,7 @@ simplefem
 OUT/*.vtu
 MINE
 MYRESULTS
+LITERATURE
 DOCUMENT/*.aux
 DOCUMENT/*.toc
 DOCUMENT/*.aux

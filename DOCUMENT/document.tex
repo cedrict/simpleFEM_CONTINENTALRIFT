@@ -107,11 +107,11 @@ Very recently Naliboff and co-workers have demonstrated, in unprecedented detail
 
 We will use a thermo-mechanically coupled Finite Element code which is very similar to the FANTOM code  \cite{thie11} or the ELEFANT code \cite{latb17}. It solves the incompressible flow Stokes equations (mass and momentum conservation equations) as well as the heat transport equation:
 \begin{eqnarray}
--{\bm \nabla}p + {\bm \nabla} \cdot (2\mu(\dot{\bm \epsilon},p,T)\dot{\bm \epsilon}) &=& \rho(T) {\bm g} \\
+-{\bm \nabla}p + {\bm \nabla} \cdot (2\mu_{eff}(\dot{\bm \epsilon},p,T)\dot{\bm \epsilon}) &=& \rho(T) {\bm g} \\
 {\bm \nabla}\cdot {\bm v} &=& 0 \\
 \rho_0 c_p \left(\frac{\partial T}{\partial t} + {\bm v}\cdot{\bm \nabla} T \right) &=& k \Delta T +H
 \end{eqnarray}
-where $p$ is the pressure, $\dot{\bm \epsilon}$ is the strainrate tensor, $\mu$ is the dynamic viscosity, $\rho(T)$ is the mass density, ${\bm g}$ is the gravitational acceleration, $T$ is the temperature, ${\bm v}$ is the velocity, $c_p$ the heat capacity coefficient, $k$ the heat conductivity coefficient, and $H$ is a source term.
+where $p$ is the pressure, $\dot{\bm \epsilon}$ is the strainrate tensor, $\mu$ is the dynamic (effective) viscosity, $\rho(T)$ is the mass density, ${\bm g}$ is the gravitational acceleration, $T$ is the temperature, ${\bm v}$ is the velocity, $c_p$ the heat capacity coefficient, $k$ the heat conductivity coefficient, and $H$ is a heat source term (typically radiogenic heating).
 
 The density depends on temperature as follows:
 \[
@@ -120,68 +120,87 @@ The density depends on temperature as follows:
 where $\alpha$ is the coefficient of thermal expansion, $\rho_0$ the reference density and $T_0$ the reference temperature
 (all three values are material dependent).
 
-It is well known that the viscosity of Earth materials depend on temperature, pressure, strainrate and potentially other quantities which are not tracked here (e.g. melt content). This renders Eq.(1) nonlinear, i.e. one of the coefficients of the PDE depends on the solution of this PDE. 
+It is well known that the viscosity of Earth materials depend on temperature, pressure, strainrate and potentially other quantities which are not tracked here (e.g. melt content). This renders Eq.(1) nonlinear, i.e. one of the coefficients of the PDE depends on the solution of this PDE. Non-linearities are iterated out: the equations are first solved with a tentative (constant) viscosity to produce a velocity and pressure fields which fulfill the boundary conditions. These fields are then used to compute/update the effective viscosity $\mu_{eff}$ and the density $\rho$. These are then used to solve the equations anew and generate a new velocity and pressure field. These iterations are called nonlinear (Picard) iterations (see Fig. 2 of \cite{thie11}). For each iteration the relative changes of two consecutive velocity and pressure  fields are computed and compared to a user-defined tolerance $tol$. When both are below this threshold value iterations stop. Note that in practice a maximum number of iterations ({\tt niter}) is implemented to avoid infinite loops.
 
-Non-linearities are iterated out: the equations are first solved with a tentative (constant) viscosity to produce a velocity and pressure fields which fulfill the boundary conditions. These fields are then used to compute/update the effective viscosity $\mu_{eff}$ and the density $\rho$. These are then used to solve the equations anew and generate a new velocity and pressure field. These iterations are called nonlinear (Picard) iterations. For each iteration the relative change of two consecutive velocity and pressure  fields are computed and compared to a user-defined tolerance $tol$. When both are below this threshold value iterations stop. Note that in practice a maximum number of iterations ({\tt niter}) is implemented.
-
-In what follows we will restrict ourselves to two-dimensional calculations in the $(x,y)$ plane. 
-The code discretises the coupled set of PDEs on a computational grid of size $L_x\times L_y$ counting $nel=nelx \times nelz$ cells/elements, as shown on the following figure:
-
-\begin{center}
-\includegraphics[width=15cm]{images/grid}
-\end{center}
-
-The code solves the mass+momentum conservation equations first and then the heat transport equations. 
-Note that there is no time integration in this work. We will be looking at a 2D domain subjected to various boundary conditions, material properties, buoyancy forces, ... instantaneously. In other words, there will be {\it no deformation}.
-
-
+In what follows we will restrict ourselves to two-dimensional calculations in the $(x,y)$ plane. The geometry of the domain and its layering is shown on the following figure:
 \begin{center}
 \includegraphics[width=15cm]{images/drawing}
 \end{center}
+ 
+The code discretises the above coupled set of PDEs on a computational grid of size $L_x\times L_y$ counting $nel=nelx \times nely$ cells/elements, as shown on the following figure:
+
+\begin{center}
+\includegraphics[width=11cm]{images/grid}
+\end{center}
+
+The code solves the mass and momentum conservation equations first and then the heat transport equation. 
+Note that there is no time integration in this work. We will be looking at a 2D domain subjected to various boundary conditions, material properties, buoyancy forces, ... instantaneously. In other words, there will be {\it no deformation}.
+
+
 
 %-------------------------------------------------------------------------
 \subsection{Rheology}
 
-In our calculations the effect of elastic deformation is neglected. Deformation is then accomodated by either viscous or plastic behavious. The effective plastic viscosity is given by \cite{thie11,nabu15,spmw16}
+In our calculations the effect of elastic deformation is neglected. Deformation is then accomodated by either viscous or plastic behaviour. The effective plastic viscosity is given by \cite{thie11,nabu15,spmw16}
 \[
 \mu_{pl} = \frac{\sigma_y}{2 \dot{\epsilon}}
 \]
 where $\sigma_y$ is the yield value which is a function of pressure (Drucker-Prager or Mohr-Coulomb type):
 \[
-\sigma_p = p \sin \phi + c \cos \phi
+\sigma_y = p \sin \phi + c \cos \phi
 \]
-$\phi$ is the angle of friction, $c$ is the cohesion. 
+where $\phi$ is the angle of friction, $c$ is the cohesion. 
 
 The effective dislocation creep viscosity is given by \cite{thie11}
 \[
-\mu_{ds}=\frac{1}{2} f A^{1/n} \dot{\epsilon}^{\frac{1}{n}-1} \exp \left( \frac{Q+pV}{nRT}  \right)
+\mu_{dl}=\frac{1}{2} f A^{1/n} \dot{\epsilon}^{\frac{1}{n}-1} \exp \left( \frac{Q+pV}{nRT}  \right)
 \]
 where $A$ is the prefactor coefficient, $n$ is the nonlinear exponent, $Q$ is the activation energy, $V$ is the activation volume, $R$ is the gas constant. $f$ is a parameter which allows us to scale the computed viscosity by a given factor, as in \cite{hube11}.
 
-In both formula $\dot{epsilon}$ is a scalar which stands for the square root of the 2nd invariant $E_2$ of the strain rate tensor (see Appendix B of \cite{thie11}):
+In both formulae $\dot{\epsilon}$ is a scalar which stands for the square root of the 2nd invariant $E_2$ of the strain rate tensor (see Appendix B of \cite{thie11}):
 \[
-\dot{\epsilon}=\sqrt{E_2} = \sqrt{ \frac{1}{2}(e_{xx}^2+e_{yy}^2)+e_{xy}^2 }
+\dot{\epsilon}=\sqrt{E_2} = \sqrt{ \frac{1}{2}(\dot{\epsilon}_{xx}^2+\dot{\epsilon}_{yy}^2)+\dot{\epsilon}_{xy}^2 }
 \]
 
 In practice both viscosities are computed at each (quadrature) point of the FE mesh and the final effective viscosity 
-is obtained by taking the harmonic average of both values.
+is obtained by taking the harmonic\footnote{https://en.wikipedia.org/wiki/Harmonic\_mean} average of both values.
 
 %-----------------------------------------------------------------------
 \subsection{Let's run the code}
 
-{\color{red} UPDATE GITHUB}
-
-You will find the {\sl elefant} executable is {\tt /aw/cedric/}. 
-
-Then bring your terminal prompt to this location.
+The code (and this document) is available on the GitHub platform\footnote{https://github.com/cedrict/simpleFEM\_CONTINENTALRIFT}. 
+In order to download it, open a terminal (CTRL+ALT+T) and type:
+\begin{verbatim}
+git clone https://github.com/cedrict/simpleFEM_CONTINENTALRIFT.git
+\end{verbatim}
+Upon completion, make sure that the folder {\tt simpleFEM\_CONTINENTALRIFT} has been created. Bring the 
+terminal prompt to the folder.
+In order to compile the code, simply type:
+\begin{verbatim}
+make
+\end{verbatim}
+When/if successful, this produces the executable {\sl simplefem}.
 Run the code by typing the following command at a terminal prompt 
 \begin{verbatim}
 ./simplefem
 \end{verbatim}
 
-The run should last at most a few minutes. You will see during this time many lines appear
+
+Once you have implemented the required features (see next section), the runs should last at most a few minutes. 
+You will see during this time many lines appear
 on your screen as the code outputs information pertaining to the calculation for every iteration.
 All visualisation files are created in the OUT folder. These consist of {\sl .vtu} files (to be opened with Paraview) and {\sl .dat} ascii files. 
+
+\fbox{\it You need to recompile the code every single time you modify a .f90 file} 
+
+Once you are done with a particular model, simply store the files you wish to keep elsewhere on the machine and then do
+\begin{verbatim}
+./clean
+make
+\end{verbatim}
+
+
+
 
 %------------------------------
 \subsubsection{Using Paraview}
@@ -191,18 +210,7 @@ In the terminal type
 paraview &
 \end{verbatim}
 In OUT you will find {\sl solution\_000001.vtu}. Open it with Paraview.
-
-Explore the fields available to you (cohesion $c(\epsilon)$, material id, effective viscosity $\mu_{eff}$ and accumulated strain $\epsilon$) as follows:
-\begin{center}
-\includegraphics[width=10cm]{images/parav2}
-\end{center}
-
-Look at the data over time by clicking on play:
-\begin{center}
-\includegraphics[width=10cm]{images/parav3}
-\end{center}
-
-In {\tt /OUTPUT/} you will find the paraview files (*.vtu). Load for instance solution\_000010.vtu in paraview. You can visualise the computational grid as follows:
+You can visualise the computational grid as follows:
 \begin{center}
 \includegraphics[width=10cm]{images/visugrid}
 \end{center}
@@ -213,7 +221,8 @@ You can/should explore the various fields in the file as follows:
 \includegraphics[width=10cm]{images/visugrid2}
 \end{center}
 
-One can also plot the velocity field with arrow glyphs. First click on the glyph icon (top left) then make sure your paraview window looks exactly like the one hereunder:
+One can also plot the velocity field with arrow glyphs. First click on the glyph icon (top left) then tweak the circled 
+menus to arrive at a similar result: 
 
 \begin{center}
 \includegraphics[width=16cm]{images/visuarrows}
@@ -224,13 +233,12 @@ One can also plot the velocity field with arrow glyphs. First click on the glyph
 \subsubsection{Using gnuplot}
 
 Bring the prompt of the terminal to the {\tt OUT} folder. You will find in there the 
-{\sl profiles.dat} and {\sl convergence\_nl.dat}.
-
+{\sl profiles.dat}, {\sl surface.dat} and {\sl convergence\_nl.dat}.
 We will use gnuplot\footnote{http://www.gnuplot.info/} to plot these. In the terminal type:
 \begin{verbatim}
 gnuplot
 \end{verbatim}
-At the gnuplot terminal, type
+At the gnuplot terminal, type (replace 'file' by the name of the file you wish to plot)
 \begin{verbatim}
 plot 'file.dat' w lp 
 \end{verbatim}
@@ -262,6 +270,12 @@ At the prompt of the terminal you can then run gnuplot as follows:
 gnuplot mygnuplot.script
 \end{verbatim}
 This should have produced the myoutput.pdf file in the same folder.
+You can visualise it as follows:
+\begin{verbatim}
+gv myoutput.pdf
+\end{verbatim}
+
+
 
 %--------------------------
 \section{Tasks ahead}
@@ -271,39 +285,45 @@ This should have produced the myoutput.pdf file in the same folder.
 Basic parameters such as the domain size and the resolution are defined in {\sl simplefem.f90}.
 In our case, we set $L_x$=400km and $L_y$=100km and we start with a 200x50 resolution. 
 
-%---------------------------
-\subsection{Temperature field}
-
-To begin with, we will impose a linear gradient in the crust and another linear gradient in the mantle lithosphere.
-In order to do so, you will have to modify the {\sl temperature\_layout.f90} file. 
 
 %---------------------------
 \subsection{Material layout}
 
-We now turn to the spatial distribution of the four lithologies (upper and lower crusts, lithospheric mantle and seed). 
-Please have a look at Fig. (2) of \cite{nabu15}. To begin with, the upper crust has a thickness of 20km, the lower crust a thickness of 10 km, the mantle of 70km. The seed is parametrised by $198km<x<202km$ and $60km<y<68km$.
-Study and modify the {\sl material\_layout.f90} file.
+We start with the spatial distribution of the four lithologies (upper and lower crusts, lithospheric mantle and seed). 
+Please have a look at the setup figure of section (2) (see also \cite{nabu15} for reference). 
+To begin with, the upper crust (material 1) has a thickness of 20km, the lower crust (material 2) a thickness of 10 km, 
+the mantle (material 3) of 70km. The seed (material 4) is parametrised by $198km<x<202km$ and $60km<y<68km$.
+Study and modify the {\sl material\_layout.f90} file in the {\tt EXPERIMENT} folder. 
+
+%---------------------------
+\subsection{Temperature field}
+
+We will impose a linear gradient in the crust and another linear gradient in the mantle lithosphere.
+In order to do so, you will have to modify the {\sl temperature\_layout.f90} file.
+
 
 %---------------------------
 \subsection{Implementing boundary conditions}
 
-Extensional boundary conditions need to be implemented as follows: 
-$-v_{ext}$ is prescribed on the left boundary,
-$+v_{ext}$ is prescribed on the right boundary,
-and the corresponding value is prescribed at the bottom so as to insure mass conservation in the domain.
+Extensional boundary conditions are as follows: 
+$-v_{ext}=-0.25$cm/yr is prescribed on the left boundary,
+$+v_{ext}=+0.25$cm/yr is prescribed on the right boundary,
+and the corresponding value is prescribed at the bottom so as to insure volume conservation in the domain.
+Study and modify the {\sl define\_bc.f90} file.
+
 
 %---------------------------
 \subsection{Implementing rheology}
 
-modify the {\sl material\_model.f90} file.
+Modify the {\sl material\_model.f90} file.
 
 \begin{itemize}
 \item from the strain rate components {\tt exxq,eyyq,exyq} compute the square root of its second invariant.
-\item for each material, assign its $Q,n,V,A,c,\phi,\alpha,T_0$ values (see Table 1 of \cite{nabu15}).
+\item for each material, assign its $Q,n,V,A,c,\phi,\alpha,T_0$ values (see Table 1 of \cite{nabu15}). Set $f=1$ for all.
 \item compute the effective dislocation creep viscosity {\tt mu\_dl}
 \item compute the effective plastic viscosity {\tt mu\_pl}
 \item compute the harmonic average {\tt mueffq} of these two quantities 
-\item make {\tt mueffq} sure it is between acceptable bounds
+\item compute the density {\tt rhoq} as a function of temperature  
 \end{itemize}
 
 
@@ -311,7 +331,7 @@ modify the {\sl material\_model.f90} file.
 %---------------------------
 \subsection{To go further}
 
-Hereafter is a list of tasks to be carried out. Some of the instructions are voluntarily vague so as to force you to think about about what you are running. For all points, document your observations with whatever quantitative data you deem appropriate. Reminder: for each run you have a vtu file and various ascii files in the OUT folder.
+Hereafter is a list of tasks to be carried out. Some of the instructions are voluntarily vague so as to force you to think about what you are doing. For all bullet points hereunder, document your observations with whatever quantitative data you deem appropriate. Reminder: for each run you have a vtu file and various ascii files in the OUT folder. 
 
 Relevant literature: 
 Rifting \cite{hube03,hubb05,hube07,hube11,bupb09,alht11,alht12,alhf13,engl83,vacl02} 
@@ -320,13 +340,14 @@ Rheology \cite{buro11,budr08,hiko03,kawu93}
 
 
 \begin{itemize}
-\item Try various grid resolutions. 
+\item Try various grid resolutions. Based on these results choose an appropriate resolution to conduct the rest of the experiments.
+
 \item Seed size/nature. 
    \begin{itemize}
    \item Vary the size of the seed and its location. 
-   \item Replace it by a region of heightened temperature. 
+   \item Replace it by a temperature anomaly. 
    \item Add a second seed.
-   \item Replace it by a notch in the crust-mantle lithosphere interface
+   \item Replace it by a notch in the crust-mantle lithosphere interface, i.e. the mantle intrudes in the crust at a given location over a few kms. 
    \item Replace it by a discontinuous Moho: left crust is 30 km thick while right crust is 30+X km thick
    \end{itemize}
 
@@ -353,16 +374,17 @@ Rheology \cite{buro11,budr08,hiko03,kawu93}
 
 \item What is the influence of the cohesion and angle of friction? 
 \item The activation energy and activation volume values are obtained from laboratory measurements. What are the uncertainties on the values presented in \cite{nabu15}?
-\item Boundary Conditions (try re-entrant b.c.) 
+\item Boundary Conditions 
 \begin{itemize}
 \item what is the influence of the extensional velocity?
 \item what happens when the bottom velocity is set to zero?
 \item what happens when the left and right velocity values are not equal ?
 \item what happens when $v_y$ is set to zero on the sides?
+\item the default value for $f$ is 1. Set it to 0.01 or 100 for the lower crust.
 \end{itemize}
 
 
-\item Model Geometry/ Initial Lithology
+%\item Model Geometry/ Initial Lithology
 
 \item nonlinear convergence settings. How does the implemented nonlinear loop work? What is the effect of the tolerance value?
 
