@@ -2,10 +2,10 @@
 
 default: code
 
-include Makefile.machine
+include Makefile.students
 
 
-WHERE = MINE
+WHERE = EXPERIMENT
 
 
 OBJECTS=\
