@@ -1,4 +1,4 @@
-*.dat
+OUT/*.dat
 *.out
 fort*
 simplefem
