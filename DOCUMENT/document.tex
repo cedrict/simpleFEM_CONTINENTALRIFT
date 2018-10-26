@@ -320,7 +320,7 @@ Modify the {\sl material\_model.f90} file.
 
 \begin{itemize}
 \item from the strain rate components {\tt exxq,eyyq,exyq} compute the square root of its second invariant.
-\item for each material, assign its $Q,n,V,A,c,\phi,\alpha,T_0$ values (see Table 1 of \cite{nabu15}). Set $f=1$ for all.
+\item for each material, assign its $Q,n,V,A,c,\phi,\alpha,T_0$ values (see Table 1 of \cite{nabu15}). Set $f=1$ for all. Make sure that the cohesion for all materials is set to 20Mpa.
 \item compute the effective dislocation creep viscosity {\tt mu\_dl}
 \item compute the effective plastic viscosity {\tt mu\_pl}
 \item compute the harmonic average {\tt mueffq} of these two quantities 
