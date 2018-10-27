@@ -37,23 +37,22 @@ real(8) Lx,Ly                                  ! size of the numerical domain
 real(8) mueff                                  ! effective dynamic viscosity 
 real(8) gx,gy                                  ! gravity acceleration
 real(8) penalty                                ! penalty parameter lambda
-real(8), dimension(:),  allocatable :: x,y     ! node coordinates arrays
-real(8), dimension(:),  allocatable :: u,v     ! node velocity arrays
-real(8), dimension(:),  allocatable :: u_old   ! node velocity arrays memory
-real(8), dimension(:),  allocatable :: v_old   ! node velocity arrays memory
-real(8), dimension(:),  allocatable :: press   ! pressure 
-real(8), dimension(:),  allocatable :: exx     ! strainrate tensor xx term 
-real(8), dimension(:),  allocatable :: eyy     ! strainrate tensor yy term 
-real(8), dimension(:),  allocatable :: exy     ! strainrate tensor xy term 
-real(8), dimension(:),  allocatable :: bc_valV ! array containing bc values for velocity
-real(8), dimension(:),  allocatable :: bc_valT ! array containing bc values for temperature
-real(8), dimension(:),  allocatable :: T       ! node temperature array
-real(8), dimension(:),  allocatable :: p,p_old ! node pressure array
-real(8), dimension(:),  allocatable :: density ! element density array
-real(8), dimension(:),  allocatable :: qx,qy   ! heat flux vector 
-real(8), dimension(:),  allocatable :: Tavrg   !
-real(8), dimension(:),  allocatable :: viscosity ! element density array
-real(8), dimension(:),  allocatable :: vpmode  ! 
+real(8), dimension(:),allocatable :: x,y       ! node coordinates arrays
+real(8), dimension(:),allocatable :: u,v       ! node velocity arrays
+real(8), dimension(:),allocatable :: press     ! pressure 
+real(8), dimension(:),allocatable :: exx       ! strainrate tensor xx term 
+real(8), dimension(:),allocatable :: eyy       ! strainrate tensor yy term 
+real(8), dimension(:),allocatable :: exy       ! strainrate tensor xy term 
+real(8), dimension(:),allocatable :: bc_valV   ! array containing bc values for velocity
+real(8), dimension(:),allocatable :: bc_valT   ! array containing bc values for temperature
+real(8), dimension(:),allocatable :: T         ! node temperature array
+real(8), dimension(:),allocatable :: p         ! node pressure array
+real(8), dimension(:),allocatable :: density   ! element density array
+real(8), dimension(:),allocatable :: qx,qy     ! heat flux vector 
+real(8), dimension(:),allocatable :: Tavrg     !
+real(8), dimension(:),allocatable :: viscosity ! element density array
+real(8), dimension(:),allocatable :: vpmode    ! 
+real(8), dimension(:),allocatable :: Res       ! residual vector 
                                                !
 real(8) rq,sq,wq                               ! local coordinate and weight of qpoint
 real(8) xq,yq                                  ! global coordinate of qpoint
@@ -77,7 +76,8 @@ real(8) hcond                                  ! heat conductivity
 real(8) time                                   ! real time
 real(8) dt                                     ! timestep
 real(8) CFL_nb                                 ! Courant number for CFL criterion
-real(8) tol                                    ! convergence tolerance
+real(8) rtol                                   ! relative convergence tolerance
+real(8) atol                                   ! absolute convergence tolerance
 real(8), parameter :: theta = 0.5              ! mid-point timestepping parameter
 real(8), parameter :: eps=1.d-10               !
 real(8), parameter :: pi = 3.14159265359d0     !
@@ -85,12 +85,13 @@ real(8), parameter :: year=31536000.d0         !
 real(8), parameter :: cm=1.d-2                 !
 real(8) M_T(4,4),Ka(4,4),Kc(4,4),KK(4,4)       ! various FEM arrays
 real(8) Nvect(1,4),NvectT(4,1)                 !
-real(8) velnorm,vel2D(1,2),temp(4)             !
+real(8) velnorm,vel2D(1,2),temp(4)
+real(8) Vel(m*ndofV),ResEl(m*ndofV)
 real(8) BmatT(2,4),BmatTT(4,2)                 !
 real(8) hx,hy                                  ! grid spacing
 real(8) umax,vmax,rho                          !
 real(8) fixt,mode                              !
-real(8) chi_u,chi_v,chi_p                      !
+real(8) Rknorm,R0norm
                                                !
 logical, dimension(:), allocatable :: bc_fixV  ! prescribed b.c. array for velocities
 logical, dimension(:), allocatable :: bc_fixT  ! prescribed b.c. array for temperature
@@ -127,14 +128,15 @@ call DMUMPS(idT)                               ! MUMPS initialisation
 Lx=400.d3
 Ly=100.d3
 
-nelx=300
+nelx=400
 nely=nelx/4
 
 gx=0
 gy=-9.81d0
 
-tol=1.d-6
-niter=100
+rtol=1.d-12
+atol=1.d-20
+niter=200
 
 hcapa=750 ! heat capacity of all materials 
 hcond=2.5 ! heat conductivity of all materials
@@ -199,6 +201,7 @@ open(unit=1001,file='OUT/pressure_stats.dat')
 open(unit=1002,file='OUT/temperature_stats.dat')
 open(unit=1003,file='OUT/convergence_nl.dat')
 open(unit=1004,file='OUT/viscosity_stats.dat')
+open(unit=1005,file='OUT/residual_stats.dat')
 open(unit=1020,file='OUT/mumps_info.dat')
 
 !==============================================!
@@ -207,9 +210,10 @@ open(unit=1020,file='OUT/mumps_info.dat')
 
 allocate(x(np))
 allocate(y(np))
-allocate(u(np),u_old(np)) ; u_old=0.d0
-allocate(v(np),v_old(np)) ; v_old=0.d0
-allocate(p(np),p_old(np)) ; p_old=0.d0
+allocate(T(np))
+allocate(u(np)) ; u=0.d0
+allocate(v(np)) ; v=0.d0
+allocate(p(np)) ; p=0.d0
 allocate(icon(m,nel))
 allocate(bc_fixV(NfemV))
 allocate(bc_fixT(NfemT))
@@ -221,11 +225,11 @@ allocate(vpmode(nel))
 allocate(exx(nel))
 allocate(eyy(nel))
 allocate(exy(nel))
-allocate(T(np))
 allocate(density(nel))
 allocate(viscosity(nel))
 allocate(qx(nel),qy(nel))
 allocate(Tavrg(nny))
+allocate(Res(np*ndofV))
 
 !==============================================!
 !===[grid points setup]========================!
@@ -359,6 +363,7 @@ do istep=1,nstep
 
 do iter=1,niter ! nonlinear iterations loop
 
+Res=0.d0
 density=0.d0
 vpmode=0.d0
 viscosity=0.d0
@@ -370,6 +375,10 @@ do iel=1,nel
 
    AelV=0.d0
    BelV=0.d0
+   Vel=(/u(icon(1,iel)),v(icon(1,iel)),&
+         u(icon(2,iel)),v(icon(2,iel)),&
+         u(icon(3,iel)),v(icon(3,iel)),&
+         u(icon(4,iel)),v(icon(4,iel))/)
 
    do iq=-1,1,2
    do jq=-1,1,2
@@ -499,6 +508,7 @@ do iel=1,nel
 
       AelV=AelV + matmul(transpose(BmatV),matmul(penalty*Kmat,BmatV))*wq*jcob
 
+
       !======================================
       !=====[impose boundary conditions]=====
       !======================================
@@ -522,6 +532,12 @@ do iel=1,nel
          enddo
       enddo
 
+      !======================================
+      !=====[compute elemental residual]=====
+      !======================================
+
+      ResEl=Belv-matmul(AelV,Vel)
+
       !=====================
       !=====[assemble]======
       !=====================
@@ -541,12 +557,22 @@ do iel=1,nel
                end do    
             end do    
             idV%RHS(m1)=idV%RHS(m1)+BelV(ikk)    
+            Res(m1)=Res(m1)+ResEl(ikk)
          end do    
       end do    
 
 end do
 
+Rknorm=sqrt(sum(Res**2))
+R0norm=sqrt(sum(idV%RHS**2))
+
+write(*,'(a,i4,a,es12.5,a,es12.5)') 'iteration:',iter,' | Res(k)/Res(0):',Rknorm/R0norm,' | tol:',rtol
+
+write(1003,*) iter,Rknorm/R0norm,rtol
 write(1004,*) iter,minval(viscosity),maxval(viscosity)
+write(1005,*) iter,minval(Res),maxval(Res),Rknorm
+
+!idV%RHS=Res ! defect correction
 
 !==============================================!
 !=====[solve system]===========================!
@@ -568,6 +594,8 @@ CALL DMUMPS(idV)
 !==============================================!
 
 do i=1,np
+   !u(i)=u(i)+idV%RHS((i-1)*ndofV+1) ! defect correction
+   !v(i)=v(i)+idV%RHS((i-1)*ndofV+2)
    u(i)=idV%RHS((i-1)*ndofV+1)
    v(i)=idV%RHS((i-1)*ndofV+2)
 end do
@@ -576,8 +604,6 @@ end do
 !write(*,*) 'min/max v',minval(v)*year/cm,maxval(v)*year/cm
 
 write(1000,*) time,minval(u),maxval(u),minval(v),maxval(v) ; call flush(1000)
-
-
 
 !==============================================!
 !=====[retrieve pressure]======================!
@@ -659,19 +685,10 @@ write(1001,*) time,minval(press),maxval(press),minval(p),maxval(p)
 !=====[assess convergence]=====================!
 !==============================================!
 
-chi_u=sum(abs(u-u_old))/sum(abs(u))
-chi_v=sum(abs(v-v_old))/sum(abs(v))
-chi_p=sum(abs(p-p_old))/sum(abs(p))
-
-write(*,'(a,i4,a,3es12.5,a,es12.5)') 'iteration:',iter,' | chi u,v,p:',chi_u,chi_v,chi_p,' | tol:',tol
-write(1003,*) iter,chi_u,chi_v,chi_p,tol
-
-u_old=u
-v_old=v
-p_old=p
-
-if (chi_u<tol .and. chi_v<tol .and. chi_p<tol) exit
-
+if (Rknorm < rtol*R0norm + atol) then
+   write(*,*) 'Convergence reached'
+   exit
+end if
 
 end do ! iter
 
@@ -685,7 +702,6 @@ vmax=maxval(abs(v))
 dt=CFL_nb*min(hx,hy)/max(umax,vmax)
 
 time=time+dt
-
 
 !==============================================!
 !=====[Build temperature matrix]===============!
@@ -845,7 +861,7 @@ write(1002,*) time,minval(T),maxval(T)
 call output_for_paraview (np,nel,x,y,u*year/cm,v*year/cm,press,p,T,&
                           density,viscosity,exx,eyy,exy,mat,vpmode,icon,istep)
 
-call output_profiles(np,nel,x,y,T,mat,density,viscosity,exx,eyy,exy,press,vpmode,icon)
+call output_profiles(np,nelx,nely,x,y,T,mat,density,viscosity,exx,eyy,exy,press,vpmode,icon)
 
 call output_surface(np,nel,x,y,viscosity,exx,eyy,exy,press,icon)
 

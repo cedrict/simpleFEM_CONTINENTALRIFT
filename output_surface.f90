@@ -1,5 +1,7 @@
 !==============================================!
-!
+!                                              !
+! C. thieulot ; October 2018                   !
+!                                              !
 !==============================================!
 
 subroutine output_surface(np,nel,x,y,viscosity,exx,eyy,exy,press,icon)
